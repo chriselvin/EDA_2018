@@ -1,0 +1,1463 @@
+---
+title: "Exploratory Data Analysis of Japanese University EFL Students' Extensive Reading Form Responses: An Action Research Project"
+author: "Chris Elvin"
+date: "20/7/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## FULL TERM REPORT
+
+###### Read the file into R.
+
+```{r}
+reading <- read.csv("full_term_report.csv", stringsAsFactors = FALSE)
+```
+
+###### View the dimensions of the data frame.
+
+```{r}
+dim(reading)
+```
+
+###### View summary statistics.
+
+```{r}
+summary(reading)
+```
+
+###### View the structure.
+
+```{r}
+str(reading)
+```
+
+###### Convert author and book title to lowercase to reduce number of factors.
+
+```{r}
+reading$Author <- tolower(reading$Author)
+reading$Book_title <- tolower(reading$Book_title)
+```
+
+###### Remove duplicated summaries.
+
+```{r}
+reading <- reading[!duplicated(reading$Summary),]
+dim(reading)
+```
+
+
+###### Convert varibles to appropriate formats.
+
+```{r}
+vars <- c("Nickname","Book_title", "Author","Publisher",
+          "Genre", "Stars", "Campus","Gender", "Period")
+reading[,vars] <- lapply(reading[,vars], factor)
+reading$Time <- as.POSIXct(reading$Time, format= "%d/%m/%Y %H:%M:%S")
+str(reading)
+```
+
+# ACADEMIC INTEGRITY
+
+###### Plagiarism was dealt with first because duplicates and mistakes needed to be removed before statistical tests were carried out.
+
+### STUDENT SUMMARY SENTENCES
+
+###### Tokenize summaries at the sentence level.
+
+```{r}
+library(quanteda)
+sentences <- tokens(reading$Summary, what="sentence")
+```
+
+###### View storage mode for the sentences variable.
+
+```{r}
+typeof(sentences)
+```
+
+######  Create a data frame of frequency counts for sentences.
+
+```{r}
+sentencesDf <- as.data.frame(table(unlist(sentences)))
+```
+
+###### View head of sentences data frame.
+
+```{r}
+head(sentencesDf)
+```
+
+######  Select duplicates.
+
+```{r}
+duplicates <- sentencesDf[sentencesDf$Freq>1,]
+```
+
+###### QUESTION What proportion of sentences were duplicates?
+
+```{r}
+nrow(duplicates)*2/nrow(sentencesDf)
+```
+
+###### COMMENT About 1 per cent of the sentences were duplicates.
+
+###### Print the duplicates.
+
+```{r}
+duplicates$Var1
+```
+
+###### COMMENT Some short simple sentences appear to be coincidental rather than plagiarized.
+
+###### QUESTION Who wrote the duplicates?
+
+```{r}
+for(i in 1:nrow(duplicates)){
+  print(reading[grep(duplicates$Var1[i], reading$Summary),][3:4])
+}
+```
+
+###### QUESTION What was the context of some of the duplicates? 
+
+```{r}
+reading[grep("Rick Evelyn and Alex found the gold bracelet of Anubis in Egypt ruins.", reading$Summary),][3:4]
+```
+
+###### COMMENT Fumiya and yuto_s wrote an identical sentence. It didn't appear to be copied from the book, as it was not natural English.
+
+```{r}
+reading[grep("When Lisa on the balcony,she saw two peaple on the balcony of the hotel Astra.they quarrel.", reading$Summary),][3:4]
+```
+
+###### COMMENT Mri had inadvertently copied herself. (She told me so.)
+
+###### Remove the mistake.
+
+```{r}
+reading <- reading[!(reading$Nickname == 'mri' & reading$Teacher_Assessment==0),]
+dim(reading)
+```
+
+```{r}
+reading[grep("For example, They give their mother  a christmas present and be provided the dinner for Lawrence of neighbor.", reading$Summary),][3:4]
+```
+
+###### COMMENT Tmk had posted twice by mistake.
+
+###### Delete the first entry by tmk.
+
+```{r}
+reading <- reading[!(reading$Nickname=="tmk" & reading$Book_title=="little woman"),]
+dim(reading)
+```
+
+
+```{r}
+reading[grep("The public high school they attended was low-priced because they had little money and were not smart.", reading$Summary),][3:4]
+```
+
+###### Were the above summaries identical?
+
+```{r}
+identical(reading$Summary[8], reading$Summary[9])
+```
+
+###### COMMENT Mako must have posted non-identical summaries of the same book.
+
+###### Delete the first posting of mako's.
+
+```{r}
+reading <- reading[!(reading$Nickname=="mako" & reading$Book_title=="who,sir? me,sir?'"),]
+dim(reading)
+```
+
+```{r}
+reading[grep("His name was Dorian and he was young and very beautiful.", reading$Summary),]
+```
+
+###### COMMENT Rino edited her work to improve the opinion but didn't use the email link for it.
+
+###### Delete first posting.
+
+```{r}
+reading <- reading[!(reading$Nickname=="rino" & reading$Book_title == "the picture of dorian gray" & reading$Genre == "historical fiction"),]
+dim(reading)
+```
+
+```{r}
+reading[grep("She lived with Tom of her husband.", reading$Summary),][3:8]
+```
+
+
+```{r}
+reading[reading$Nickname == 'mirei' & reading$Book_title == 'within high fences',]
+```
+
+###### COMMENT These two postings were only different by summary types. Delete the one with fewer words (later) after including summary types in reading df.
+
+Cinque began to broke the other slave`s chains.
+
+```{r}
+reading[grep("Cinque began to broke the other slave`s chains.", reading$Summary),][3:8]
+```
+
+###### Remove the second summary, as the first one is better.
+
+```{r}
+reading <- reading[!(reading$Nickname == 'nono' & reading$Book_title == 'amisted'),]
+dim(reading)
+```
+
+
+###### Rebuild duplicates and recheck them.
+
+```{r}
+sentences <- tokens(reading$Summary, what="sentence")
+sentencesDf <- as.data.frame(table(unlist(sentences)))
+duplicates <- sentencesDf[sentencesDf$Freq>1,]
+nrow(duplicates)*2/nrow(sentencesDf)
+duplicates$Var1
+```
+
+### AUTHOR ATTRIBUTION
+
+###### Create variables summary token count, opinion token count and total token count.
+
+```{r}
+reading$summaryTokens <- ntoken(reading$Summary)
+reading$opinionTokens <- ntoken(reading$Opinion)
+reading$totalTokens <- reading$summaryTokens + reading$opinionTokens
+```
+
+###### Create new variables for summary and opinion sentence counts and summary and opinion types.
+
+```{r}
+reading$summarySentenceCount <- nsentence(reading$Summary)
+reading$opinionSentenceCount <- nsentence(reading$Opinion)
+reading$summaryTypes <- ntype(reading$Summary)
+reading$opinionTypes <- ntype(reading$Opinion)
+```
+
+###### Add summary and opinion counts to create total counts.
+
+```{r}
+reading$totalSentenceCount <- reading$summarySentenceCount + reading$opinionSentenceCount
+reading$totalTypes <- reading$summaryTypes + reading$opinionTypes
+```
+
+###### Compute lexical diversity variables for summary writing.
+
+```{r}
+summaryCorpus <- corpus(reading$Summary)
+summaryDfm <- dfm(summaryCorpus)
+summaryLexicalDiversity <- textstat_lexdiv(summaryDfm)
+str(summaryLexicalDiversity)
+```
+
+###### Add token type ratio of summaries to reading data frame.
+
+```{r}
+reading$summaryTTR <- summaryLexicalDiversity$TTR
+```
+
+###### COMMENT Some of the other measures of lexical diversity may be better at classifying students than token type ratio. Try later.
+
+###### Similarly, compute lexical diversity variables for opinion writing.
+
+```{r}
+opinionCorpus <- corpus(reading$Opinion)
+opinionDfm <- dfm(opinionCorpus)
+opinionLexicalDiversity <- textstat_lexdiv(opinionDfm)
+str(opinionLexicalDiversity)
+```
+
+###### Add token type ratio of opinions to reading data frame.
+
+```{r}
+reading$opinionTTR <- opinionLexicalDiversity$TTR
+```
+
+###### Eliminate Mirei's homework posting which differed by summary types.
+
+```{r}
+reading <- reading[!(reading$Nickname=="mirei" & reading$Book_title=="within high fences" & reading$summaryTypes == 98),]
+dim(reading)
+```
+
+###### Rebuild duplicates and recheck them.
+
+```{r}
+sentences <- tokens(reading$Summary, what="sentence")
+sentencesDf <- as.data.frame(table(unlist(sentences)))
+duplicates <- sentencesDf[sentencesDf$Freq>1,]
+nrow(duplicates)*2/nrow(sentencesDf)
+duplicates$Var1
+```
+
+###### COMMENT There were only a few duplicates left and none of them looked like plagiarism. Return to Authorship Attribution.
+
+###### Create a data frame of eleven independent variables pertaining to student writing.
+
+```{r}
+library(dplyr)
+studentWriting <- select(reading, Nickname, summaryTokens, opinionTokens, totalTokens, summarySentenceCount, opinionSentenceCount, totalSentenceCount, summaryTypes, opinionTypes, totalTypes, summaryTTR, opinionTTR)
+```
+
+###### Split the student writing data frame into training and testing sets.
+
+```{r}
+library(caTools)
+set.seed(1066)
+split <- sample.split(studentWriting$Nickname, SplitRatio = 2/3)
+train <- subset(studentWriting, split==TRUE)
+test <- subset(studentWriting, split==FALSE)
+```
+
+###### Plot a decision tree of the training set model.
+
+```{r}
+# figure2
+library(rpart)
+library(rpart.plot)
+CARTmodel <- rpart(Nickname~., data=train, method="class")
+prp(CARTmodel, varlen=0)
+```
+
+###### Make predictions on the testing set.
+
+```{r}
+CARTmodelPredict <- predict(CARTmodel, newdata=test, type="class")
+```
+
+###### Calculate the accuracy of the CART model on the testing set.
+
+```{r}
+t = table(test$Nickname, CARTmodelPredict)
+CARTpredsAccuracy <- sum(diag(t))/sum(t)
+CARTpredsAccuracy
+```
+
+###### COMMENT The model was fourteen per cent accurate when tested on unseen data, which is worse than before. Is editing an issue?
+
+###### QUESTION How more accurate is the model than the base model?
+
+```{r}
+CARTpredsAccuracy - 1/nlevels(reading$Nickname)
+```
+
+###### COMMENT The model was thirteen per cent more accurate than the base model.
+
+###### QUESTION How many times more accurate is the model than the base model?
+
+```{r}
+CARTpredsAccuracy/(1/nlevels(reading$Nickname))
+```
+
+###### COMMENT The model was eight times more accurate than guesswork.
+
+###### Which students were predicted accurately?
+
+```{r}
+tail(sort(diag(table(test$Nickname, CARTmodelPredict))),15)
+```
+
+###### COMMENT The decision tree contained ten correct predictions and four errors.
+
+# MONITORING HOMEWORK ASSIGNMENTS
+
+### FREQUENCY
+
+###### QUESTION How many homework assignments were posted per month?
+
+```{r}
+reading$Month <- as.factor(months(reading$Time))
+table(reading$Month)
+```
+
+###### QUESTION In which week did they post?
+
+```{r}
+reading$Week = cut(reading$Time, breaks="weeks")
+levels(reading$Week) <- paste("W", 1:nlevels(reading$Week), sep="")
+table(reading$Week)
+```
+
+###### COMMENT Many students were posting regularly.
+
+###### QUESTION How many assignments did the students post?
+
+```{r}
+table(table(reading$Week, reading$Nickname))
+```
+
+###### COMMENT Students usually posted one or none per week. Some edited many at a time.
+
+###### QUESTION Which day of the week did the students post homework assignments?
+
+```{r}
+reading$Day <- as.factor(weekdays(reading$Time))
+sort(table(reading$Day))
+```
+
+###### COMMENT Many students posted on the day of class (Tuesday or Friday) or the one before it.
+
+###### QUESTION How many assignments did the students post?
+
+###### Subset the data frame by campus.
+
+```{r}
+Tokyo <- reading[reading$Campus=="Tokyo",]
+Tokyo$Nickname <- factor(Tokyo$Nickname)
+Saitama <- reading[reading$Campus=="Saitama",]
+Saitama$Nickname <- factor(Saitama$Nickname)
+```
+
+###### QUESTION How many assignments did the students at Tokyo complete?
+
+```{r}
+table(Tokyo$Nickname)
+```
+
+###### COMMENT Many students were keeping pace with the homework.
+
+###### Subset the two Saitama classes by period.
+
+```{r}
+SaitamaPeriod3 <- subset(reading, reading$Period=="Niiza period 3 (1:15pm to 2:45pm)")
+SaitamaPeriod3$Nickname <- factor(SaitamaPeriod3$Nickname)
+SaitamaPeriod4 <- subset(reading, reading$Period=="Niiza period 4 (3:00pm to 4:30pm)")
+SaitamaPeriod4$Nickname <- factor(SaitamaPeriod4$Nickname)
+```
+
+###### QUESTION How many assignments did Saitama Period 3 complete?
+
+```{r}
+table(SaitamaPeriod3$Nickname)
+```
+
+###### COMMENT Many Saitama 3 students were keeping pace with the homework.
+
+###### QUESTION How many assignments did the Saitama Period 4 complete?
+
+```{r}
+table(SaitamaPeriod4$Nickname)
+```
+
+###### COMMENT Many students were a little behind.
+
+###### QUESTION In which week did the students post their assignments?
+
+```{r}
+table(reading$Nickname, reading$Week)
+```
+
+######  Plot a heatmap of homework assignments per student per week.
+
+```{r}
+library(ggplot2)
+heatmap <- as.data.frame(table(reading$Week, reading$Nickname))
+figure1 <- ggplot(aes(x=Var1, y=Var2, fill = Freq), data=heatmap) +
+  geom_tile() +
+  ggtitle("Homework Assignments Per Student Per Week") +
+  scale_fill_gradient(low="white", high="purple") +
+  ylab("Students") +
+  xlab("Week") +
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y = element_blank())
+figure1
+```
+
+###### WARNING (2) The heatmap did not show zero submission students.
+
+###### WARNING (1) Students who edited their homework had their timestamps updated.
+
+###### QUESTION What was the average opinion word count per week?
+
+```{r}
+round(tapply(reading$opinionTokens, reading$Week, mean))
+```
+
+###### COMMENT The opinion word count seemed to have increased since the mid-term test in week 8.
+
+###### Plot a scatterplot of opinion word counts per week.
+
+```{r}
+ggplot(aes(x = Week, y = opinionTokens), data = reading) +
+    geom_point() +
+  ggtitle("Opinion Word Counts per Student per Week") +
+  ylab("Opinion Word Counts")
+```
+
+###### COMMENT Students who didn't write much of an opinion during the mid-term test scored badly. Will they change?
+
+### WRITING VOLUME
+
+###### QUESTION What was the average word count for summary?
+
+```{r}
+mean(reading$summaryTokens)
+```
+
+###### QUESTION What was the average word count for opinion?
+
+```{r}
+mean(reading$opinionTokens)
+```
+
+###### Plot a histogram of summary tokens versus opinion tokens.
+
+```{r}
+library(ggplot2)
+ggplot() + 
+  geom_histogram(aes(x=opinionTokens), data = reading, binwidth=10, fill = "red") + 
+  geom_histogram(aes(x=summaryTokens), data = reading, binwidth=10, fill = "green") +
+  scale_x_continuous(breaks = seq(0,1200,100)) +
+  xlab("Word Count Per Student") +
+  ylab("Number of Assignments") +
+  ggtitle("Opinion and Summary Word Counts")
+
+```
+
+###### Run a t-test for summary and opinion word counts.
+
+```{r}
+t.test(reading$summaryTokens, reading$OpinionTokens)
+```
+
+###### COMMENT The opinions were significantly shorter than the summaries.
+
+###### Calculate the effect size of summary and opinion token difference.
+
+```{r}
+library(effsize)
+cohen.d(reading$opinionTokens, reading$summaryTokens, conf.level=0.95)
+```
+
+###### COMMENT The difference between the summary length and opinion length was large.
+
+###### QUESTION What was the average total word count for each campus?
+
+###### Calculate the mean word count per campus.
+
+```{r}
+tapply(reading$totalTokens, reading$Campus, mean)
+```
+
+###### Calculate the standard deviation word count per campus.
+
+```{r}
+tapply(reading$totalTokens, reading$Campus, sd)
+```
+
+###### Plot the graphs of word counts per homework assignments for each campus.
+
+```{r}
+ggplot(aes(x=totalTokens), data=reading) +
+  geom_histogram(aes(fill=Campus), binwidth=10) +
+  scale_x_continuous(breaks = seq(0,1500,100)) +
+  xlab("Word Count Per Student") +
+  ylab("Number of Assignments") +
+  ggtitle("Homework Assignment Word Count per Campus")
+```
+
+###### COMMENT The histogram was positively skewed. The median may be a better measure of central tendency.
+
+###### QUESTION What were the median scores for total word count per campus?
+
+```{r}
+tapply(reading$totalTokens, reading$Campus, median)
+```
+
+###### COMMENT The differences between the median scores was smaller than the differences between the mean scores.
+
+###### Despite skewedness due to an outlier, run a student's t.test to compare the two campuses. (Alternatively, Run a Kruskal Wallis test.)
+
+###### QUESTION Who wrote more, Tokyo students or Saitama students?
+
+```{r}
+t.test(Saitama$totalTokens, Tokyo$totalTokens)
+```
+
+###### COMMENT Saitama campus students wrote significantly more than Tokyo campus students.
+
+###### Calculate the effect size.
+
+```{r}
+cohen.d(Saitama$totalTokens, Tokyo$totalTokens, conf.level=0.95)
+```
+
+###### COMMENT The effect size for writing volume per campus was medium.
+
+###### QUESTION Who wrote more, boys or girls?
+
+###### Calculate the mean word count for gender.
+
+```{r}
+tapply(reading$totalTokens, reading$Gender, mean)
+```
+
+###### Calculate the standard deviation word count for gender.
+
+```{r}
+tapply(reading$totalTokens, reading$Gender, sd)
+```
+
+###### Plot the graph of word count volume against gender.
+
+```{r}
+ggplot(aes(x=totalTokens), data=reading) +
+  geom_histogram(aes(fill=Gender), binwidth=10) +
+  scale_x_continuous(breaks = seq(0,1500,100)) +
+  xlab("Word Count Per Student") +
+  ylab("Number of Assignments") +
+  ggtitle("Homework Assignment Word Count per Gender")
+```
+
+###### COMMENT The histogram was positively skewed. The median may be a better measure of central tendency.
+
+###### QUESTION What were the median scores for total word count per gender?
+
+```{r}
+tapply(reading$totalTokens, reading$Gender, median)
+```
+
+###### COMMENT The differences between the median scores was smaller than the differences between the mean scores.
+
+###### Run a t-test to compare word counts per assignment subsetted by gender.
+
+```{r}
+females <- subset(reading, Gender=="Female")
+males <- reading[reading$Gender!="Female",]
+t.test(females$totalTokens, males$totalTokens)
+```
+
+###### COMMENT Girls wrote significantly more than boys.
+
+###### Calculate the effect size.
+
+```{r}
+cohen.d(females$totalTokens, males$totalTokens, conf.level=0.95)
+```
+
+###### COMMENT: The effect size was small for the difference between total word count between boys and girls.
+
+###### QUESTION Did the number of homework postings differ by campus?
+
+###### Run a chi squared goodness of fit test for assignment postings by campus.
+
+```{r}
+table(reading$Campus)
+```
+
+```{r}
+reading %>%
+  group_by(Campus) %>%
+  summarize(count = n_distinct(Nickname))
+```
+
+
+```{r}
+observed_postings_campus <- c(160, 260)
+expected_postings_campus <- c(20, 38)
+expected_probs_campus <- prop.table(expected_postings_campus)
+chisq.test(observed_postings_campus, p=expected_probs_campus)
+```
+
+###### COMMENT: Neither campus posted more homework assigmnents than the other.
+
+###### QUESTION Did the number of homework postings differ by gender?
+
+###### Run a chi squared goodness of fit test for assignment postings by gender.
+
+```{r}
+table(reading$Gender)
+```
+
+```{r}
+reading %>%
+  group_by(Gender) %>%
+  summarize(count = n_distinct(Nickname))
+```
+
+
+```{r}
+observed_postings_gender <- c(245, 175)
+expected_postings_gender <- c(31, 27)
+expected_probs_gender <- prop.table(expected_postings_gender)
+chisq.test(observed_postings_gender, p=expected_probs_gender)
+```
+
+###### COMMENT: Females posted more homework assigmnents than males.
+
+# THE LEARNER EXPERIENCE
+
+### GRADED READERS
+
+###### QUESTION Which books were borrowed most?
+
+```{r}
+reading$Stars <- as.numeric(reading$Stars)
+borrowed_often <- select(reading, Book_title, Stars, Nickname) %>%
+  group_by(Book_title) %>%
+  summarize(count = n(), average = mean(Stars)) %>%
+  arrange(desc(count), desc(average)) %>%
+  head(50)
+borrowed_often
+```
+
+###### QUESTION Which genres were popular?
+
+```{r}
+popular_genres <- select(reading, Genre) %>%
+  group_by(Genre) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(10)
+popular_genres
+```
+
+###### Plot an ordered bar chart for genre of books borrowed.
+
+```{r}
+ggplot(data=reading, aes(x=reorder(Genre,Genre,
+                     function(x)+length(x)))) +
+  geom_bar() +
+  theme(axis.text.x = element_text(size = 12, angle = 90, hjust=1),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank()) +
+  ggtitle("Genre Selection") +
+  ylab("Books Borrowed")
+```
+
+###### Run a chi squared analysis for genre.
+
+```{r}
+chisqReadingGenre <- chisq.test(table(reading$Genre))
+chisqReadingGenre
+```
+
+###### COMMENT Some genres were borrowed more than others.
+
+###### QUESTION Which genres were borrowed more than others?
+
+```{r}
+sort(chisqReadingGenre$stdres)
+```
+
+###### COMMENT Fantasy, action adventure, and mystery were borrowed often. 
+
+###### QUESTION Who were the popular authors?
+
+```{r}
+top_authors <- select(reading, Author) %>%
+  group_by(Author) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(20)
+top_authors
+```
+
+###### COMMENT There were only a few famous writers on the list.
+
+###### QUESTION Who were the popular publishers?
+
+```{r}
+top_publishers <- select(reading, Publisher) %>%
+  group_by(Publisher) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(6)
+top_publishers
+```
+
+###### COMMENT Macmillan and Penguin books were popular.
+
+###### QUESTION How did students rate the books that they borrowed?
+
+```{r}
+table(reading$Stars)
+```
+
+###### QUESTION What was the average book rating by students?
+
+```{r}
+mean(reading$Stars)
+```
+
+###### COMMENT Students tended to award about three stars per book.
+
+###### Plot boxplots of stars against genre.
+
+```{r}
+reading$Stars <- as.numeric(reading$Stars)
+ggplot(aes(x=Genre, y=Stars), data=reading) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90),
+        axis.ticks.x=element_blank()) +
+  ggtitle("Student Ratings")
+
+```
+
+###### COMMENT Students expressed neutrality often.
+
+###### Run a one-way analysis of variance test (ANOVA) for star ratings.
+
+```{r}
+reading$Stars <- as.numeric(reading$Stars)
+aovStarRatings <- aov(Stars ~ Genre, data=reading)
+summary(aovStarRatings)
+```
+
+###### COMMENT Students star ratings indicated no preference for genre.
+
+###### QUESTION What were some recommendations and by whom?
+
+```{r}
+top100 <- select(reading, Book_title, Stars, Nickname) %>%
+  arrange(desc(Stars)) %>%
+  head(100)
+top100
+```
+
+#### GENRE AND GENDER
+
+###### Create a table count for gender and genre.
+
+```{r}
+table(reading$Genre, reading$Gender)
+```
+
+###### Plot a barchart of genre selection by gender.
+
+```{r}
+ggplot(aes(x=Genre), data=reading) +
+geom_bar(aes(fill=Genre)) +
+facet_wrap(~Gender) +
+ylab("Book Count") +
+theme(axis.text.x = element_text(angle = 90),
+      axis.ticks.x=element_blank()) +
+  ggtitle("Genre Selection by Gender")
+```
+
+###### COMMENT Girls' preferences appeared to show more variety than boys'.
+
+###### QUESTION Was the chi squared assumption that the value of the cells should be 5 or more in at least 80% of the data met?
+
+```{r}
+mean(table(reading$Genre, reading$Gender)>=5)
+```
+
+###### COMMENT The chi-squared test assumption was met.
+
+###### Run a chi-squared test of 
+
+
+```{r}
+chisq.test(reading$Gender, reading$Genre)
+```
+
+###### COMMENT Boys and girls tatstes in books were different.
+
+#### GENRE AND CAMPUS
+
+###### Create a table count for genre and campus
+
+```{r}
+table(reading$Genre, reading$Campus)
+```
+
+###### Plot barcharts of genre selection by campus.
+
+```{r}
+ggplot(aes(x=Genre), data=reading) +
+geom_bar(aes(fill=Genre)) +
+facet_wrap(~Campus) +
+ylab("Book Count") +
+theme(axis.text.x = element_text(angle = 90),
+      axis.ticks.x=element_blank()) +
+  ggtitle("Genre Selection by Campus")
+```
+
+###### COMMENT Genre selection appeared to be similar for both campuses.
+
+###### QUESTION Was the chi squared assumption that the value of the cells should be 5 or more in at least 80% of the data met?
+
+```{r}
+mean(table(reading$Genre, reading$Campus)>=5)
+```
+
+###### COMMENT Chi squared assumption was met.
+
+###### Run a chi-squared test for books borrowed by genre and campus.
+
+```{r}
+chisq.test(reading$Genre, reading$Campus)
+```
+
+###### COMMENT There was no difference between campuses for types of books borrowed.
+
+### GROUPING
+
+###### Check student nicknames list.
+
+```{r}
+levels(reading$Nickname)
+```
+
+###### COMMENT Only one person hadn't posted a homework assignment yet.
+
+###### QUESTION What was the female male ratios for the Tokyo class?
+
+```{r}
+Tokyo %>%
+  group_by(Gender) %>%
+  summarize(counts = n_distinct(Nickname)/nlevels(Tokyo$Nickname))
+```
+
+###### QUESTION What was the female male ratio for Saitama 3 class?
+
+```{r}
+SaitamaPeriod3 %>%
+  group_by(Gender) %>%
+  summarize(counts = n_distinct(Nickname)/nlevels(SaitamaPeriod3$Nickname))
+```
+
+###### QUESTION What was the female male ratio for Saitama 4 class?
+
+```{r}
+SaitamaPeriod4 %>%
+  group_by(Gender) %>%
+  summarize(counts = n_distinct(Nickname)/nlevels(SaitamaPeriod4$Nickname))
+```
+
+###### Create tables of counts for author, publisher, genre, and stars for Tokyo students.
+
+```{r}
+Tokyo$Nickname <- factor(Tokyo$Nickname)
+Ttitle <- table(Tokyo$Nickname, Tokyo$Author)
+Tauthor <- table(Tokyo$Nickname, Tokyo$Author)
+Tpublisher <- table(Tokyo$Nickname, Tokyo$Publisher)
+Tgenre <- table(Tokyo$Nickname, Tokyo$Genre)
+Tstars <- table(Tokyo$Nickname, Tokyo$Stars)
+```
+
+###### Create a matrix of the five variables.
+
+```{r}
+TClusterDf <- cbind(Ttitle, Tauthor, Tpublisher, Tgenre, Tstars)
+```
+
+###### Plot a dendrogram of the clustered students.
+
+```{r}
+library(ggdendro)
+figure3 <- ggdendrogram(hclust(dist(TClusterDf)))
+figure3
+```
+
+###### Inspect a cluster.
+
+```{r}
+filter(reading, Nickname == "fumiya" | Nickname == "kakuto") %>%
+  group_by(Nickname) %>%
+  select(Nickname, Book_title, Author, Publisher, Genre, Stars)
+```
+
+###### COMMENT Fumiya and Kakuto didn't like the books that they read.
+
+###### Plot dendrogram for Saitama period 3 students.
+
+```{r}
+SaitamaPeriod3title <- table(SaitamaPeriod3$Nickname, SaitamaPeriod3$Book_title)
+SaitamaPeriod3author <- table(SaitamaPeriod3$Nickname, SaitamaPeriod3$Author)
+SaitamaPeriod3publisher <- table(SaitamaPeriod3$Nickname, SaitamaPeriod3$Publisher)
+SaitamaPeriod3genre <- table(SaitamaPeriod3$Nickname, SaitamaPeriod3$Genre)
+SaitamaPeriod3stars <- table(SaitamaPeriod3$Nickname, SaitamaPeriod3$Stars)
+SaitamaPeriod3ClusterDf <- cbind(SaitamaPeriod3title, SaitamaPeriod3author, SaitamaPeriod3publisher, SaitamaPeriod3genre, SaitamaPeriod3stars)
+ggdendrogram(hclust(dist(SaitamaPeriod3ClusterDf)))
+```
+
+###### Plot a dendrogram for Saitama period 4 students.
+
+```{r}
+SaitamaPeriod4title <- table(SaitamaPeriod4$Nickname, SaitamaPeriod4$Author)
+SaitamaPeriod4author <- table(SaitamaPeriod4$Nickname, SaitamaPeriod4$Author)
+SaitamaPeriod4publisher <- table(SaitamaPeriod4$Nickname, SaitamaPeriod4$Publisher)
+SaitamaPeriod4genre <- table(SaitamaPeriod4$Nickname, SaitamaPeriod4$Genre)
+SaitamaPeriod4stars <- table(SaitamaPeriod4$Nickname, SaitamaPeriod4$Stars)
+SaitamaPeriod4ClusterDf <- cbind(SaitamaPeriod4title, SaitamaPeriod4author, SaitamaPeriod4publisher, SaitamaPeriod4genre, SaitamaPeriod4stars)
+ggdendrogram(hclust(dist(SaitamaPeriod4ClusterDf)))
+```
+
+###### COMMENT Three people were missing from the dendrogram. One because he didn't submit homework, and two because they didn't respond to an online form about which Saitama class they were in.
+
+# HOMEWORK ASSIGNMENT ASSESSMENT
+
+###### Calculate summary statistics for student scores.
+
+```{r}
+summary(reading$Teacher_Assessment)
+```
+
+###### COMMENT The average score was 2.86 out of four and the was three.
+
+###### QUESTION What was the average student's total score?
+
+```{r}
+
+scores <- select(reading, Nickname, Teacher_Assessment) %>%
+  group_by(Nickname) %>%
+  summarize(Total = sum(Teacher_Assessment))
+scores <- as.data.frame(scores) 
+summary(scores$Total)
+```
+
+###### COMMENT The average total score was fifteen points.
+
+###### QUESTION What would be the students predicted scores for this homework assigmnent?
+
+```{r}
+15/nlevels(reading$Week)*summary(scores$Total)
+```
+
+###### COMMENT The average score will be about 25 points, and some students should reach the maximum of 40.
+
+###### QUESTION What was the average number of postings per student?
+
+```{r}
+averageNpostings <- nrow(reading)/nlevels(reading$Nickname)
+averageNpostings
+```
+
+###### COMMENT This was slightly behind the pace of a minimum target of ten assignments per student.
+
+###### QUESTION What were the students' total provisional scores?
+
+```{r}
+###### tapply(reading$Teacher_Assessment, reading$Nickname, sum)
+```
+
+###### QUESTION What were the students' average provisional scores?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Nickname, mean)
+```
+
+###### QUESTION What were the standard deviations of the students' scores?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Nickname, sd)
+```
+
+###### COMMENT Most were standard deviations were small so students' writing and my marking appear consistent.
+
+###### QUESTION What were the homework assignment scores?
+
+```{r}
+table(reading$Teacher_Assessment)
+```
+
+###### COMMENT Most assignments scored three points.
+
+###### QUESTION What were the assignment score percentages?
+
+```{r}
+round(prop.table(table(reading$Teacher_Assessment))*100)
+```
+
+###### COMMENT Fifty percent of the assignment scores were for three points.
+
+###### Plot a histogram of homework assignment scores.
+
+```{r}
+ggplot(aes(x=Teacher_Assessment), data = reading) +
+  geom_histogram(binwidth=1) +
+  ggtitle("Homework Assignment Scores") +
+  ylab("Count") +
+  xlab("score")
+```
+
+#### WRITING VARIABLES AND TEST SCORE CORRELATION
+
+###### QUESTION How did the students' writing variables correlate with assessment score?
+
+```{r}
+vars <- c("summaryTokens", "opinionTokens", "totalTokens", 
+          "summarySentenceCount", "opinionSentenceCount",
+          "summaryTypes", "opinionTypes",
+          "totalSentenceCount", "totalTypes", 
+          "summaryTTR", "opinionTTR")
+
+cor(reading$Teacher_Assessment, reading[,vars])
+```
+
+###### COMMENT Types were more important than tokens. Opinions were more important than summaries. TTR was negatively correlated.
+
+###### COMMENT The correlation between teacher assessment and total types appeared weak.
+
+###### Run Pearson's product-moment correlation test for the strongest and weakest variables with assignment score.
+
+```{r}
+cor.test(reading$Teacher_Assessment, reading$totalTypes)
+```
+
+###### COMMENT Total types was significant.
+
+```{r}
+cor.test(reading$Teacher_Assessment, reading$summarySentenceCount)
+```
+
+###### COMMENT All variables, including summary sentence count, were significant.
+
+###### Run a scatterplot of teacher assessment against total types.
+
+```{r}
+ggplot(aes(x=totalTypes, y=Teacher_Assessment), data = reading) +
+  geom_point() +
+  stat_smooth(method="lm") +
+  ggtitle("Correlation of Total Types and\nTeacher Assessment") +
+  ylab("Teacher Assessment") +
+  xlab("Total Types")
+```
+
+###### QUESTION What were the individual scores for the students of each campus?
+
+```{r}
+Saitama %>%
+  ggplot(aes(totalTypes, Teacher_Assessment, label = Nickname)) +
+  geom_label()
+```
+
+```{r}
+Tokyo %>%
+  ggplot(aes(totalTypes, Teacher_Assessment, label = Nickname)) +
+  geom_label()
+```
+
+###### QUESTION What would be a simple model for predicting homework assessment scores?
+
+###### Build a linear regression model to find out relationship between writing features and homework assessment score.
+
+```{r}
+linMod1 <- lm(Teacher_Assessment ~ summaryTokens + opinionTokens +
+                summarySentenceCount + opinionSentenceCount +
+                summaryTypes + opinionTypes + 
+                summaryTTR + opinionTTR, data = reading)
+summary(linMod1)
+```
+
+###### COMMENT Simplify the model using the step function.
+
+```{r}
+linMod2 <- step(linMod1)
+summary(linMod2)
+```
+
+###### COMMENT Thirty percent of students' homework assignment scores were due four features of their writing. Only summary and opinion types were positively correlated.
+
+#### SCORES AND GENDER
+
+###### QUESTION What were the mean homework assignment scores for gender?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Gender, mean)
+```
+
+###### COMMENT The average girl's score was higher than the average boy's.
+
+###### QUESTION What was the standard deviation of the students' provisional homework assignment scores by gender?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Gender, sd)
+```
+
+###### Plot a density curve of student homework assignment scores per gender.
+
+```{r}
+ggplot(reading, aes(x = Teacher_Assessment, y = ..density.., colour=Gender)) + 
+  stat_density(geom="line") +
+  ggtitle("Homework Assignment Scores per Gender") +
+  ylab("Density") +
+  xlab("Score")
+```
+
+###### QUESTION Was the difference between the boys' and girls' scores significant?
+
+###### Run a t-test of score versus gender for homework assignment scores.
+
+```{r}
+Females <- subset(reading, reading$Gender=="Female")
+Males <- reading[!reading$Gender=="Female",]
+t.test(Females$Teacher_Assessment, Males$Teacher_Assessment)
+```
+
+###### COMMENT: There was a significant difference between genders for homework assignment scores.
+
+###### Calculate the effect size.
+
+```{r}
+
+cohen.d(Females$Teacher_Assessment, Males$Teacher_Assessment, conf.level=0.95)
+```
+
+###### COMMENT The effect size was small for the difference between male and female scores.
+
+#### SCORES AND CAMPUS
+
+###### QUESTION What were the mean homework assignment scores for campus?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Campus, mean)
+```
+
+###### COMMENT Saitama homework assignment scores were higher than those of Tokyo.
+
+###### QUESTION What were the standard deviations of the homework assignment provisional test scores by campus?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Campus, sd)
+```
+
+###### Plot a density curve of student homework assignment scores per gender.
+
+```{r}
+ggplot(reading, aes(x = Teacher_Assessment, y = ..density.., colour = Campus)) + 
+  stat_density(geom="line") +
+  ggtitle("Homework Assignment Scores per Campus") +
+  ylab("Density") +
+  xlab("Score")
+```
+
+###### Run a t-test of score versus gender for homework assignment scores.
+
+```{r}
+t.test(Tokyo$Teacher_Assessment, Saitama$Teacher_Assessment)
+```
+
+###### COMMENT: There was a significant difference between the campuses for homework assignment scores.
+
+###### Calculate the effect size.
+
+```{r}
+cohen.d(Saitama$Teacher_Assessment, Tokyo$Teacher_Assessment, conf.level=0.95)
+```
+
+###### COMMENT The effect size was small for the difference between Saitama and Tokyo campus' scores.
+
+#### SCORES, CAMPUS & GENDER
+
+###### QUESTION What was the relationship between gender and campus and homework assignment scores?
+
+###### Plot homework assignment scores for gender and campus.
+
+```{r}
+ggplot(data=reading) +
+  aes(x=Gender, y=Teacher_Assessment, group=Campus, color=Campus) +
+  stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.y = mean, geom = "point") +
+  ggtitle("Effect of Gender and Campus \non Homework Assignment Scores") +
+  ylab("Score")
+```
+
+###### COMMENT: There was an interaction between gender and campus.
+
+###### QUESTION Were the differences in the boys' and girls' scores for the two campuses significant?
+
+###### Run two-way analysis of variance (ANOVA) test of independence for homework assignment score by campus and gender.
+
+```{r}
+genderCampusAov <- aov(Teacher_Assessment~Gender*Campus,data= reading)
+summary(genderCampusAov)
+```
+
+###### COMMENT There was a significant difference between the two genders for homework assignment score.
+
+###### Run a Tukey's HSD to see where the differences were.
+
+```{r}
+TukeyHSD(genderCampusAov)
+```
+
+###### COMMENT Males at Tokyo got lower scores than everyone else.
+
+### HOMEWORK ASSIGNMENTS & TIME
+
+###### QUESTION What was the mean value of homework assignment scores per month?
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Month, mean)
+```
+
+###### COMMENT The homework assignment scores appeared realatively constant per month.
+
+###### Run an one-way analysis of variance (ANOVA) for score against month.
+
+```{r}
+monthAov <- aov(Teacher_Assessment~Month, data=reading)
+summary(monthAov)
+```
+
+###### COMMENT The quality of homework assignments did not change from month to month.
+
+###### QUESTION What was the mean score for homework assignments per week?
+
+###### Review how many assignments were posted per week.
+
+```{r}
+table(reading$Week)
+```
+
+###### Calculate average scores per week.
+
+```{r}
+tapply(reading$Teacher_Assessment, reading$Week, mean)
+```
+
+###### COMMENT The scores appeared to be fluctuating week by week.
+
+###### Plot a line graph of the mean homework assignment scores per week.
+
+```{r}
+figure4 <- ggplot(data=reading) +
+  aes(x=Week, y=Teacher_Assessment, group=Campus, color=Campus) +
+  stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.y = mean, geom = "point") +
+  ylab("Average Homework Score") + 
+  ggtitle("Weekly Homework Assignment Scores")
+figure4
+```
+
+###### COMMENT Ignoring the first and last week (few postings), there appeared to be a downward trend.
+
+###### QUESTION Was there a difference in the weekly homework assignment scores?
+
+###### Run a one-way ANOVA for homework assignment scores per week.
+
+```{r}
+weekAov <- aov(Teacher_Assessment~Week,data= reading)
+summary(weekAov)
+```
+
+###### COMMENT Homework assignment scores were related to week of posting.
+
+###### Run a Tukey's HSD to see which weeks differ.
+
+```{r}
+TukeyHSD(weekAov)
+```
+
+###### COMMENT There was no relationship between assignment scores and week of posting.
+
+###### QUESTION What was the mean value of homework assignment scores per day?
+
+```{r}
+sort(table(reading$Day))
+sort(tapply(reading$Teacher_Assessment, reading$Day, mean))
+```
+
+###### COMMENT Apart from Thursday, there appeared to be an inverse relationship between number of postings and homework assignment score.
+
+###### Run a one-way analysis of variance (ANOVA) for score versus day of week.
+
+```{r}
+dayAov <- aov(Teacher_Assessment~Day,data= reading)
+summary(weekAov)
+```
+
+###### COMMENT There was a significant difference between day of homework assignment posting and score.
+
+###### Run a Tukey's HSD to see where the differences lie.
+
+```{r}
+TukeyHSD(dayAov)
+```
+
+###### COMMENT There was no significant difference for any family-wise pair of days.
+
+#### FINALIZE GRADES
+
+###### Report half-term homework assignment scores to students.
+
+```{r}
+scores <- select(reading, Nickname, Campus, Teacher_Assessment,
+  summaryTokens, opinionTokens) %>%
+  group_by(Nickname) %>%
+  summarize(books = length(Teacher_Assessment), 
+  score = sum(Teacher_Assessment), 
+  average = mean(Teacher_Assessment), 
+  percent=average*25, 
+  summary_Words = round(mean(summaryTokens)), 
+  opinion_Words = round(mean(opinionTokens)))
+
+print(tbl_df(scores), n=nlevels(reading$Nickname))
+```
+
+#### END OF TERM SURVEY
+
+###### QUESTION Did you enjoy reading graded readers?
+
+```{r}
+survey <- read.csv("survey.csv")
+```
+
+###### Plot a bar chart of student reaction to reading graded readers.
+
+```{r}
+ggplot(aes(x = Did.you.enjoy.reading.graded.readers.), data=survey) +
+  geom_bar() +
+  ggtitle("Did you enjoy reading graded readers?") +
+  xlab("")
+```
+
+###### QUESTION Will you continue reading graded readers after the course has finished?
+
+```{r}
+ggplot(aes(x = Will.you.continue.reading.graded.readers.after.the.course.has.finished.), data=survey) +
+  geom_bar() +
+  theme(axis.text.x = element_text(size = 8, angle = 75, hjust=1),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank()) +
+  ggtitle("Will you continue reading graded readers\nafter the course has finished?") +
+  xlab("")
+```
+
+###### QUESTION How was reading graded readers?
+
+```{r}
+ggplot(aes(x = How.was.the.reading.graded.readers.), 
+  data=survey) +
+  geom_bar() +
+  theme(axis.text.x = element_text(size = 10, angle = 75, hjust=1),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank()) +
+  ggtitle("How was reading graded readers?") +
+  xlab("")
+```
+
+###### QUESTION How was the writing about graded readers?
+
+```{r}
+ggplot(aes(x = How.was.the.writing.about.graded.readers.), 
+  data=survey) +
+  geom_bar() +
+  theme(axis.text.x = element_text(size = 10, angle = 75, hjust=1),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank()) +
+  ggtitle("How was writing about graded readers?") +
+  xlab("")
+```
+
+###### Plot a word cloud of students' comments.
+
+```{r}
+survey$Do.you.have.any.comments. <- as.character(survey$Do.you.have.any.comments.)
+student_comments <- dfm(survey$Do.you.have.any.comments.)
+textplot_wordcloud(student_comments, max_words = 200, max_size = 16, min_count = 2)
+```
+
