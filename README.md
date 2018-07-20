@@ -1,2 +1,2 @@
-# EDA_2018
-Exploratory Data Analysis of Japanese Students Extensive Reading Form Responses
+# eda-half-term-report
+Exploratory Data Analysis of Japanese EFL Students' Extensive Reading Form Responses: An Action Research Project
