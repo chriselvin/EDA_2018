@@ -1,7 +1,7 @@
 ---
 title: "Exploratory Data Analysis of Japanese University EFL Students' Extensive Reading Form Responses: An Action Research Project"
 author: "Chris Elvin"
-date: "20/7/2018"
+date: "22/7/2018"
 output:
   html_document: default
   pdf_document: default
@@ -213,7 +213,6 @@ reading[grep("Cinque began to broke the other slave`s chains.", reading$Summary)
 reading <- reading[!(reading$Nickname == 'nono' & reading$Book_title == 'amisted'),]
 dim(reading)
 ```
-
 
 ###### Rebuild duplicates and recheck them.
 
@@ -1382,7 +1381,7 @@ TukeyHSD(dayAov)
 
 #### FINALIZE GRADES
 
-###### Report half-term homework assignment scores to students.
+###### Report homework assignment scores to students.
 
 ```{r}
 scores <- select(reading, Nickname, Campus, Teacher_Assessment,
@@ -1396,6 +1395,18 @@ scores <- select(reading, Nickname, Campus, Teacher_Assessment,
   opinion_Words = round(mean(opinionTokens)))
 
 print(tbl_df(scores), n=nlevels(reading$Nickname))
+```
+
+###### QUESTION What was the average number of books the students read?
+
+```{r}
+mean(table(reading$Nickname))
+```
+
+###### QUESTION What was the average score per book?
+
+```{r}
+mean(reading$Teacher_Assessment)
 ```
 
 #### END OF TERM SURVEY
@@ -1460,4 +1471,46 @@ survey$Do.you.have.any.comments. <- as.character(survey$Do.you.have.any.comments
 student_comments <- dfm(survey$Do.you.have.any.comments.)
 textplot_wordcloud(student_comments, max_words = 200, max_size = 16, min_count = 2)
 ```
+
+#### TEACHER'S SECOND ASSESSMENT
+
+```{r}
+ggplot(data=reading) +
+  aes(x=Week, y=Teacher_Assessment_2, group=Campus, color=Campus) +
+  stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.y = mean, geom = "point") +
+  ylab("Average Homework Score") + 
+  ggtitle("Weekly Homework Assignment Scores")
+```
+
+###### COMMENT Some students edited their work for the better. Overall, the pattern seemed to be of consistency over time, apart from the last few weeks at Tokyo when the deadline loomed for some.
+
+###### QUESTION What was the difference between the two teacher's assessments?
+
+```{r}
+table(reading$Teacher_Assessment, reading$Teacher_Assessment_2)
+```
+
+###### COMMENT Mostly students scored higher for the second assessment. The two principal factors were students editing (to improve), and teacher marking error.
+
+#### FINAL GRADES
+
+###### Record final scores.
+
+```{r}
+final_scores <- select(reading, Nickname, Campus, Teacher_Assessment,
+  Teacher_Assessment_2) %>%
+  group_by(Nickname) %>%
+  summarize(
+  books = length(Teacher_Assessment),
+  score_1 = sum(Teacher_Assessment),
+  score_2 = sum(Teacher_Assessment_2),
+  average = (score_1 + score_2)/2, 
+  percent=average*2.5,)
+
+print(tbl_df(final_scores), n=nlevels(reading$Nickname))
+
+```
+
+###### COMMENT The second assessment will be their final assessment. They did a great job!
 
